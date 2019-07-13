@@ -74,9 +74,11 @@ def attrs_schema(cls: Type, type_hook: Optional[_TYPE_HOOK] = None):
     def make_object_func(self, data):
         return cls(**data)
 
+    fields["make_object"] = make_object_func
+
     return type("Schema", (marshmallow.Schema,), fields)
 
-def add_schema(cls: Type = None, make_object: bool = True, type_hook: _TYPE_HOOK = None):
+def add_schema(cls: Type = None, type_hook: _TYPE_HOOK = None):
     def wrapper(cls: Type):
         if "__attrs_attrs__" not in cls.__dict__:
             cls = attr.s(cls, auto_attribs=True, kw_only=True)
