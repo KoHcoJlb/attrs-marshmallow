@@ -1,10 +1,9 @@
-from functools import partial
-from typing import Type, Callable, Mapping, Any, Optional
-
 import attr
 import marshmallow
+from functools import partial
 from marshmallow import Schema, post_load
 from marshmallow.fields import Field, Raw
+from typing import Type, Callable, Mapping, Any, Optional
 from typing_inspect import get_origin, get_args, is_optional_type
 
 MARSHMALLOW_FIELD = "marshmallow_field"
@@ -71,7 +70,7 @@ def attrs_schema(cls: Type, type_hook: Optional[_TYPE_HOOK] = None):
     fields = {name: _field_for_attribute(attribute, type_hook) for name, attribute in attr.fields_dict(cls).items()}
 
     @post_load
-    def make_object_func(self, data):
+    def make_object_func(self, data, **kwargs):
         return cls(**data)
 
     fields["make_object"] = make_object_func
