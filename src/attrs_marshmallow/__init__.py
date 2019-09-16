@@ -1,9 +1,10 @@
+from functools import partial
+from typing import Type, Callable, Mapping, Any, Optional
+
 import attr
 import marshmallow
-from functools import partial
 from marshmallow import Schema, post_load
 from marshmallow.fields import Field, Raw
-from typing import Type, Callable, Mapping, Any, Optional
 from typing_inspect import get_origin, get_args, is_optional_type
 
 MARSHMALLOW_FIELD = "marshmallow_field"
@@ -30,10 +31,10 @@ class TypedDictField(Field):
         super().__init__(*args, **kwargs)
         self.value_field = value_field
 
-    def _serialize(self, value, attr, obj):
+    def _serialize(self, value, attr, obj, **kwargs):
         return {key: self.value_field.serialize(key, value) for key in value}
 
-    def _deserialize(self, value, attr, data):
+    def _deserialize(self, value, attr, data, **kwargs):
         return {key: self.value_field.deserialize(value, key, data) for key, value in value.items()}
 
 def _field_for_type(tp: Type, field_kwargs: Mapping[str, Any], field_for_type: _FIELD_FOR_TYPE) -> Field:
