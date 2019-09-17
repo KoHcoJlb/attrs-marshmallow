@@ -4,7 +4,7 @@ from typing import Type, Callable, Mapping, Any, Optional
 import attr
 import marshmallow
 from marshmallow import Schema, post_load
-from marshmallow.fields import Field, Raw
+from marshmallow.fields import Field, Raw, Dict
 from typing_inspect import get_origin, get_args, is_optional_type
 
 MARSHMALLOW_FIELD = "marshmallow_field"
@@ -26,17 +26,6 @@ SIMPLE_TYPES = {
 _FIELD_FOR_TYPE = Callable[[Type, Mapping[str, Any]], Field]
 _TYPE_HOOK = Callable[[Type, Mapping[str, Any], _FIELD_FOR_TYPE], Field]
 
-class TypedDictField(Field):
-    def __init__(self, *args, value_field: Field, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.value_field = value_field
-
-    def _serialize(self, value, attr, obj, **kwargs):
-        return {key: self.value_field.serialize(key, value) for key in value}
-
-    def _deserialize(self, value, attr, data, **kwargs):
-        return {key: self.value_field.deserialize(value, key, data) for key, value in value.items()}
-
 def _field_for_type(tp: Type, field_kwargs: Mapping[str, Any], field_for_type: _FIELD_FOR_TYPE) -> Field:
     origin = get_origin(tp)
     args = get_args(tp)
@@ -46,8 +35,7 @@ def _field_for_type(tp: Type, field_kwargs: Mapping[str, Any], field_for_type: _
     if origin == list:
         return marshmallow.fields.List(field_for_type(args[0], {}), **field_kwargs)
     elif origin == dict:
-        value_field = field_for_type(args[1], {})
-        return TypedDictField(value_field=value_field, **field_kwargs)
+        return Dict(keys=field_for_type(args[0], {}), values=field_for_type(args[1], {}))
     elif is_optional_type(tp):
         return field_for_type(args[0], field_kwargs)
     elif hasattr(tp, "Schema"):
