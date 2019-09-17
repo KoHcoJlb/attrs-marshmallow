@@ -5,10 +5,12 @@ import attr
 import marshmallow
 from marshmallow import Schema, post_load
 from marshmallow.fields import Field, Raw, Dict
+from marshmallow.schema import SchemaMeta
 from typing_inspect import get_origin, get_args, is_optional_type
 
 MARSHMALLOW_FIELD = "marshmallow_field"
 MARSHMALLOW_KWARGS = "marshmallow_kwargs"
+ATTRIBUTE = "attrs_attribute"
 
 class MissingType:
     def __bool__(self):
@@ -30,21 +32,21 @@ def _field_for_type(tp: Type, field_kwargs: Mapping[str, Any], field_for_type: _
     origin = get_origin(tp)
     args = get_args(tp)
 
-    field_kwargs = {"allow_none": True, **field_kwargs}
+    field_kwargs = {"required": True, **field_kwargs}
 
     if origin == list:
         return marshmallow.fields.List(field_for_type(args[0], {}), **field_kwargs)
     elif origin == dict:
-        return Dict(keys=field_for_type(args[0], {}), values=field_for_type(args[1], {}))
+        return Dict(keys=field_for_type(args[0], {}), values=field_for_type(args[1], {}), **field_kwargs)
     elif is_optional_type(tp):
-        return field_for_type(args[0], field_kwargs)
+        return field_for_type(args[0], {**field_kwargs, "required": False, "missing": None})
     elif hasattr(tp, "Schema"):
         return marshmallow.fields.Nested(tp.Schema, **field_kwargs)
     else:
         return SIMPLE_TYPES.get(tp, Raw)(**field_kwargs)
 
 def _field_for_attribute(attribute: attr.Attribute, type_hook: Optional[_TYPE_HOOK]) -> Field:
-    field_kwargs = attribute.metadata.get(MARSHMALLOW_KWARGS, {})
+    field_kwargs = {**attribute.metadata.get(MARSHMALLOW_KWARGS, {}), ATTRIBUTE: attribute}
     if type_hook:
         field_for_type = partial(type_hook)
         field_for_type.keywords["default"] = partial(_field_for_type, field_for_type=field_for_type)
@@ -56,13 +58,17 @@ def _field_for_attribute(attribute: attr.Attribute, type_hook: Optional[_TYPE_HO
     return attribute.metadata.get(MARSHMALLOW_FIELD, field)
 
 def attrs_schema(cls: Type, type_hook: Optional[_TYPE_HOOK] = None):
-    fields = {name: _field_for_attribute(attribute, type_hook) for name, attribute in attr.fields_dict(cls).items()}
+    fields = {name: _field_for_attribute(attribute, type_hook)
+              for name, attribute
+              in attr.fields_dict(cls).items()
+              if attribute.init}
 
     @post_load
     def make_object_func(self, data, **kwargs):
         return cls(**data)
 
     fields["make_object"] = make_object_func
+    fields.update({name: getattr(cls, name) for l in SchemaMeta.resolve_hooks(cls).values() for name in l})
 
     return type("Schema", (marshmallow.Schema,), fields)
 
