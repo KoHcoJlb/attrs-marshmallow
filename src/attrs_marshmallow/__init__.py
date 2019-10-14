@@ -47,6 +47,9 @@ def _field_for_type(tp: Type, field_kwargs: Mapping[str, Any], field_for_type: _
 
 def _field_for_attribute(attribute: attr.Attribute, type_hook: Optional[_TYPE_HOOK]) -> Field:
     field_kwargs = {**attribute.metadata.get(MARSHMALLOW_KWARGS, {}), ATTRIBUTE: attribute}
+    if attribute.default:
+        field_kwargs["required"] = False
+
     if type_hook:
         field_for_type = partial(type_hook)
         field_for_type.keywords["default"] = partial(_field_for_type, field_for_type=field_for_type)
