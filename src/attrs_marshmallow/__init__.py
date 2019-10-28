@@ -4,7 +4,7 @@ from typing import Type, Callable, Mapping, Any, Optional
 import attr
 import marshmallow
 from marshmallow import Schema, post_load
-from marshmallow.fields import Field, Raw, Dict
+from marshmallow.fields import Field, Raw, Dict, Nested
 from marshmallow.schema import SchemaMeta
 from typing_inspect import get_origin, get_args, is_optional_type
 
@@ -17,6 +17,13 @@ class MissingType:
         return False
 
 Missing = MissingType()
+
+class NestedField(Nested):
+    @property
+    def schema(self):
+        schema = super().schema
+        schema.unknown = self.parent.unknown
+        return schema
 
 def schema(**fields):
     return type("Schema", (Schema,), fields)
@@ -41,7 +48,7 @@ def _field_for_type(tp: Type, field_kwargs: Mapping[str, Any], field_for_type: _
     elif is_optional_type(tp):
         return field_for_type(args[0], {**field_kwargs, "required": False, "missing": None})
     elif hasattr(tp, "Schema"):
-        return marshmallow.fields.Nested(tp.Schema, **field_kwargs)
+        return NestedField(tp.Schema, **field_kwargs)
     else:
         return SIMPLE_TYPES.get(tp, Raw)(**field_kwargs)
 
