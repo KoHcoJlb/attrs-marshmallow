@@ -4,7 +4,7 @@ from typing import Type, Callable, Mapping, Any, Optional
 import attr
 import marshmallow
 from marshmallow import Schema, post_load
-from marshmallow.fields import Field, Raw, Dict, Nested
+from marshmallow.fields import Field, Raw, Dict, Nested, List
 from marshmallow.schema import SchemaMeta
 from typing_inspect import get_origin, get_args, is_optional_type
 
@@ -22,7 +22,11 @@ class NestedField(Nested):
     @property
     def schema(self):
         schema = super().schema
-        schema.unknown = self.parent.unknown
+        if not self.unknown:
+            if isinstance(self.parent, Schema):
+                schema.unknown = self.parent.unknown
+            elif isinstance(self.parent, List) or isinstance(self.parent, Dict):
+                schema.unknown = self.parent.parent.unknown
         return schema
 
 def schema(**fields):
