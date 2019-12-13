@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Type, Callable, Mapping, Any, Optional
+from typing import Type, Callable, Mapping, Any, Optional, MutableMapping
 
 import attr
 import marshmallow
@@ -32,7 +32,7 @@ class NestedField(Nested):
 def schema(**fields):
     return type("Schema", (Schema,), fields)
 
-SIMPLE_TYPES = {
+_SIMPLE_TYPES: MutableMapping[Type, Type[Field]] = {
     str: marshmallow.fields.String
 }
 
@@ -54,7 +54,7 @@ def _field_for_type(tp: Type, field_kwargs: Mapping[str, Any], field_for_type: _
     elif hasattr(tp, "Schema"):
         return NestedField(tp.Schema, **field_kwargs)
     else:
-        return SIMPLE_TYPES.get(tp, Raw)(**field_kwargs)
+        return _SIMPLE_TYPES.get(tp, Raw)(**field_kwargs)
 
 def _field_for_attribute(attribute: attr.Attribute, type_hook: Optional[_TYPE_HOOK]) -> Field:
     field_kwargs = {**attribute.metadata.get(MARSHMALLOW_KWARGS, {}), ATTRIBUTE: attribute}
@@ -98,3 +98,6 @@ def add_schema(cls: Type = None, type_hook: _TYPE_HOOK = None):
         return wrapper(cls)
 
     return wrapper
+
+def register_field(cls: Type, field: Type[Field]):
+    _SIMPLE_TYPES[cls] = field
