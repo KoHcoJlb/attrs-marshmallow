@@ -5,16 +5,10 @@ import marshmallow
 from marshmallow import Schema, post_load
 from marshmallow.fields import Raw, Field, Nested
 from marshmallow.schema import SchemaMeta
-from typing_inspect import get_origin, get_args, is_optional_type
+from typing_inspect import get_origin, get_args, is_union_type
 
 ATTRIBUTE = "attrs_attribute"
 MARSHMALLOW_OPTS = "marshmallow_opts"
-
-class MissingType:
-    def __bool__(self):
-        return False
-
-Missing = MissingType()
 
 class NestedField(Nested):
     @property
@@ -55,8 +49,8 @@ def _default_field_for_attribute(cls: type, attribute: attr.Attribute, tp: type,
         field = marshmallow.fields.Dict(keys=field_for_attr(cls, attribute, args[0], {}),
                                         values=field_for_attr(cls, attribute, args[1], {}),
                                         **field_kwargs)
-    elif is_optional_type(tp):
-        field = field_for_attr(cls, attribute, args[0], {**field_kwargs, "required": False, "missing": None})
+    elif is_union_type(tp):
+        field = field_for_attr(cls, attribute, args[0], field_kwargs)
     elif hasattr(tp, "Schema"):
         field = NestedField(tp.Schema, **field_kwargs)
     # Self reference
@@ -71,7 +65,7 @@ def _default_field_for_attribute(cls: type, attribute: attr.Attribute, tp: type,
 def attrs_schema(cls: Type, field_for_attr_hook: Optional[FIELD_FOR_ATTR_HOOK] = None,
                  make_object: bool = True):
     def field_for_attr(cls: type, attribute: attr.Attribute, tp: type, field_kwargs: Mapping[str, Any]):
-        field_kwargs = {"required": attribute.default is attr.NOTHING, **field_kwargs,
+        field_kwargs = {"required": attribute.default is attr.NOTHING, "allow_none": True, **field_kwargs,
                         **get_marshmallow_opt(attribute, "kwargs", {}), ATTRIBUTE: attribute}
 
         for hook in _FIELD_FOR_ATTR_HOOKS + [field_for_attr_hook]:
