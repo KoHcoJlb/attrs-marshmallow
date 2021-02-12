@@ -1,69 +1,26 @@
-from typing import Type, Callable, Mapping, Any, Optional, ForwardRef, List, Dict, Union
+from typing import Type, Callable, Mapping, Any, Optional, ForwardRef, List, Dict
 
 import attr
 import marshmallow
-from marshmallow import Schema, post_load, ValidationError
-from marshmallow.fields import Raw, Field, Nested
+from marshmallow import Schema, post_load
+from marshmallow.fields import Raw, Field
 from marshmallow.schema import SchemaMeta
 from typing_inspect import get_origin, get_args, is_union_type
+
+from .fields.nested import NestedField
+from .fields.polymorphic import PolymorphicField
 
 ATTRIBUTE = "attrs_attribute"
 MARSHMALLOW_OPTS = "marshmallow_opts"
 
-class NestedField(Nested):
-    @property
-    def schema(self):
-        schema = super().schema
-        if not self.unknown:
-            if isinstance(self.parent, Schema):
-                schema.unknown = self.parent.unknown
-            elif isinstance(self.parent, marshmallow.fields.List) or isinstance(self.parent, marshmallow.fields.Dict):
-                schema.unknown = self.parent.parent.unknown
-        return schema
-
-class PolymorphicField(Field):
-    def __init__(self, key: str, subtypes: Dict[Any, Union[Field, Schema, type]], **kwargs):
-        super().__init__(**kwargs)
-        self.key = key
-
-        def map_subtype(subtype):
-            if isinstance(subtype, Field):
-                return subtype
-            if isinstance(subtype, Schema):
-                return NestedField(subtype)
-            if isinstance(subtype, type):
-                if issubclass(subtype, Schema):
-                    return NestedField(subtype)
-                else:
-                    return NestedField(subtype.Schema)
-            raise TypeError("invalid subtype '{}'".format(subtype))
-
-        self.subtypes = {key: map_subtype(subtype) for key, subtype in subtypes.items()}
-
-    def _deserialize(self, value: Any, attr: Optional[str],
-                     data: Optional[Mapping[str, Any]], **kwargs):
-        if not isinstance(value, dict):
-            raise ValidationError("value must be dict")
-
-        subtype_name = value.pop(self.key, None)
-        subtype = self.subtypes.get(subtype_name)
-        if not subtype:
-            raise ValidationError("unknown subtype '{}'".format(subtype_name))
-
-        return subtype._deserialize(value, attr, data, **kwargs)
-
-    def _serialize(self, value: Any, attr: str, obj: Any, **kwargs):
-        subtype_name = self.get_value(value, self.key)
-        subtype = self.subtypes.get(subtype_name)
-        if not subtype:
-            raise ValueError("unknown subtype '{}'".format(value))
-        return subtype._serialize(value, attr, obj, **kwargs)
 
 def schema(**fields):
     return type("Schema", (Schema,), fields)
 
+
 def get_marshmallow_opt(field: attr.Attribute, key: str, default=None) -> Any:
     return field.metadata.get(MARSHMALLOW_OPTS, {}).get(key, default)
+
 
 FIELD_FOR_ATTR = Callable[[type, attr.Attribute, type, Mapping[str, Any]], Field]
 FIELD_FOR_ATTR_HOOK = Callable[[type, attr.Attribute, type, Mapping[str, Any], FIELD_FOR_ATTR], Optional[Field]]
@@ -75,6 +32,7 @@ _SIMPLE_TYPES: Dict[Type, Type[Field]] = {
 }
 
 _FIELD_FOR_ATTR_HOOKS: List[FIELD_FOR_ATTR_HOOK] = []
+
 
 def _default_field_for_attribute(cls: type, attribute: attr.Attribute, tp: type, field_kwargs: Mapping[str, Any],
                                  field_for_attr: FIELD_FOR_ATTR) -> Field:
@@ -99,6 +57,7 @@ def _default_field_for_attribute(cls: type, attribute: attr.Attribute, tp: type,
         field = _SIMPLE_TYPES.get(tp, Raw)(**field_kwargs)
 
     return get_marshmallow_opt(attribute, "field", field)
+
 
 def attrs_schema(cls: Type, field_for_attr_hook: Optional[FIELD_FOR_ATTR_HOOK] = None,
                  make_object: bool = True):
@@ -133,6 +92,7 @@ def attrs_schema(cls: Type, field_for_attr_hook: Optional[FIELD_FOR_ATTR_HOOK] =
 
     return type("Schema", (marshmallow.Schema,), fields)
 
+
 def add_schema(cls: Type = None, field_for_attr: FIELD_FOR_ATTR_HOOK = _default_field_for_attribute):
     def wrapper(cls: Type):
         if "__attrs_attrs__" not in cls.__dict__:
@@ -145,6 +105,7 @@ def add_schema(cls: Type = None, field_for_attr: FIELD_FOR_ATTR_HOOK = _default_
         return wrapper(cls)
 
     return wrapper
+
 
 def marshmallow_opts(attribute: Optional[attr.Attribute] = None, *,
                      skip: Optional[bool] = False,
@@ -166,8 +127,10 @@ def marshmallow_opts(attribute: Optional[attr.Attribute] = None, *,
 
     return attribute
 
+
 def register_simple_field(cls: Type, field: Type[Field]):
     _SIMPLE_TYPES[cls] = field
+
 
 def register_field_hook(field_for_attr_hook: FIELD_FOR_ATTR_HOOK):
     _FIELD_FOR_ATTR_HOOKS.append(field_for_attr_hook)
