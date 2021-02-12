@@ -1,8 +1,17 @@
 [tool.poetry]
 name = "attrs-marshmallow"
-version = "0.5.1"
+version = "0.5.3"
 description = ""
 authors = ["Igor Stuzhuk (KoHcoJlb) <fujitsuigor@gmail.com>"]
+keywords = [
+    "marshmallow",
+    "attrs",
+    "serialization",
+    "deserialization"
+]
+
+[tool.poetry.urls]
+Repository = "https://github.com/KoHcoJlb/attrs-marshmallow"
 
 [tool.poetry.dependencies]
 python = "^3.7"
