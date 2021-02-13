@@ -1,4 +1,5 @@
 from enum import Enum
+from pathlib import PurePath
 from typing import Type, Callable, Mapping, Any, Optional, ForwardRef, List, Dict
 
 import attr
@@ -10,12 +11,14 @@ from typing_inspect import get_origin, get_args, is_union_type
 
 from .fields.enum import EnumField
 from .fields.nested import NestedField
+from .fields.path import PathField
 from .fields.polymorphic import PolymorphicField
 
 ATTRIBUTE = "attrs_attribute"
 MARSHMALLOW_OPTS = "marshmallow_opts"
 
 MARSHMALLOW_FIELD_OPT = "field"
+
 
 def schema(**fields):
     return type("Schema", (Schema,), fields)
@@ -58,6 +61,8 @@ def _default_field_for_attribute(cls: type, attribute: attr.Attribute, tp: type,
         return NestedField("self", **field_kwargs)
     elif issubclass(tp, Enum):
         return EnumField(tp, **field_kwargs)
+    elif issubclass(tp, PurePath):
+        return PathField(tp, **field_kwargs)
     else:
         return _SIMPLE_TYPES.get(tp, Raw)(**field_kwargs)
 
