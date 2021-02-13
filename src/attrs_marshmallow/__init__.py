@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Type, Callable, Mapping, Any, Optional, ForwardRef, List, Dict
 
 import attr
@@ -7,12 +8,14 @@ from marshmallow.fields import Raw, Field
 from marshmallow.schema import SchemaMeta
 from typing_inspect import get_origin, get_args, is_union_type
 
+from .fields.enum import EnumField
 from .fields.nested import NestedField
 from .fields.polymorphic import PolymorphicField
 
 ATTRIBUTE = "attrs_attribute"
 MARSHMALLOW_OPTS = "marshmallow_opts"
 
+MARSHMALLOW_FIELD_OPT = "field"
 
 def schema(**fields):
     return type("Schema", (Schema,), fields)
@@ -40,28 +43,32 @@ def _default_field_for_attribute(cls: type, attribute: attr.Attribute, tp: type,
     args = get_args(tp)
 
     if origin == list:
-        field = marshmallow.fields.List(field_for_attr(cls, attribute, args[0], {}), **field_kwargs)
+        return marshmallow.fields.List(field_for_attr(cls, attribute, args[0], {}), **field_kwargs)
     elif origin == dict:
-        field = marshmallow.fields.Dict(keys=field_for_attr(cls, attribute, args[0], {}),
-                                        values=field_for_attr(cls, attribute, args[1], {}),
-                                        **field_kwargs)
+        return marshmallow.fields.Dict(keys=field_for_attr(cls, attribute, args[0], {}),
+                                       values=field_for_attr(cls, attribute, args[1], {}),
+                                       **field_kwargs)
     elif is_union_type(tp):
-        field = field_for_attr(cls, attribute, args[0], field_kwargs)
+        return field_for_attr(cls, attribute, args[0], field_kwargs)
     elif hasattr(tp, "Schema"):
-        field = NestedField(tp.Schema, **field_kwargs)
+        return NestedField(tp.Schema, **field_kwargs)
     # Self reference
     elif tp == cls or isinstance(tp, str) and tp == cls.__name__ \
             or isinstance(tp, ForwardRef) and tp.__forward_arg__ == cls.__name__:
-        field = NestedField("self", **field_kwargs)
+        return NestedField("self", **field_kwargs)
+    elif issubclass(tp, Enum):
+        return EnumField(tp, **field_kwargs)
     else:
-        field = _SIMPLE_TYPES.get(tp, Raw)(**field_kwargs)
-
-    return get_marshmallow_opt(attribute, "field", field)
+        return _SIMPLE_TYPES.get(tp, Raw)(**field_kwargs)
 
 
 def attrs_schema(cls: Type, field_for_attr_hook: Optional[FIELD_FOR_ATTR_HOOK] = None,
                  make_object: bool = True):
     def field_for_attr(cls: type, attribute: attr.Attribute, tp: type, field_kwargs: Mapping[str, Any]):
+        field = get_marshmallow_opt(attribute, MARSHMALLOW_FIELD_OPT)
+        if field:
+            return field
+
         field_kwargs = {"required": attribute.default is attr.NOTHING, "allow_none": True, **field_kwargs,
                         **get_marshmallow_opt(attribute, "kwargs", {}), ATTRIBUTE: attribute}
 
