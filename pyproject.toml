@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "attrs-marshmallow"
-version = "0.6.1"
+version = "0.6.2"
 description = ""
 authors = ["Igor Stuzhuk (KoHcoJlb) <fujitsuigor@gmail.com>"]
 keywords = [

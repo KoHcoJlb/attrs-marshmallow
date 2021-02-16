@@ -17,6 +17,9 @@ from .fields.polymorphic import PolymorphicField
 ATTRIBUTE = "attrs_attribute"
 MARSHMALLOW_OPTS = "marshmallow_opts"
 
+MARSHMALLOW_DATA_KEY_OPT = "data_key"
+MARSHMALLOW_KWARGS_OPT = "kwargs"
+MARSHMALLOW_SKIP_OPT = "skip"
 MARSHMALLOW_FIELD_OPT = "field"
 
 
@@ -69,13 +72,22 @@ def _default_field_for_attribute(cls: type, attribute: attr.Attribute, tp: type,
 
 def attrs_schema(cls: Type, field_for_attr_hook: Optional[FIELD_FOR_ATTR_HOOK] = None,
                  make_object: bool = True):
+    """
+    This function takes class and returns generated Schema for it.
+
+    :param cls:
+    :param field_for_attr_hook: Function that creates fields for attributes
+    :param make_object: Function that creates class from dict
+    :return:
+    """
+
     def field_for_attr(cls: type, attribute: attr.Attribute, tp: type, field_kwargs: Mapping[str, Any]):
         field = get_marshmallow_opt(attribute, MARSHMALLOW_FIELD_OPT)
         if field:
             return field
 
         field_kwargs = {"required": attribute.default is attr.NOTHING, "allow_none": True, **field_kwargs,
-                        **get_marshmallow_opt(attribute, "kwargs", {}), ATTRIBUTE: attribute}
+                        **get_marshmallow_opt(attribute, MARSHMALLOW_KWARGS_OPT, {}), ATTRIBUTE: attribute}
 
         for hook in _FIELD_FOR_ATTR_HOOKS + [field_for_attr_hook]:
             if hook:
@@ -88,7 +100,7 @@ def attrs_schema(cls: Type, field_for_attr_hook: Optional[FIELD_FOR_ATTR_HOOK] =
     fields = {name: field_for_attr(cls, attribute, attribute.type, {})
               for name, attribute
               in attr.fields_dict(cls).items()
-              if attribute.init and not get_marshmallow_opt(attribute, "skip")}
+              if attribute.init and not get_marshmallow_opt(attribute, MARSHMALLOW_SKIP_OPT)}
 
     @post_load
     def make_object_func(self, data, **kwargs):
@@ -106,6 +118,14 @@ def attrs_schema(cls: Type, field_for_attr_hook: Optional[FIELD_FOR_ATTR_HOOK] =
 
 
 def add_schema(cls: Type = None, field_for_attr: FIELD_FOR_ATTR_HOOK = _default_field_for_attribute):
+    """
+    Decorator that adds schema to the class. Schema is then accessible as `Schema` attribute.
+    If class isn't attrs class, it will be wrapped automatically with auto_attribs=True, kw_only=True.
+    :param cls:
+    :param field_for_attr:
+    :return:
+    """
+
     def wrapper(cls: Type):
         if "__attrs_attrs__" not in cls.__dict__:
             cls = attr.s(cls, auto_attribs=True, kw_only=True)
@@ -124,25 +144,45 @@ def marshmallow_opts(attribute: Optional[attr.Attribute] = None, *,
                      field: Optional[Field] = None,
                      kwargs: Optional[Mapping] = None,
                      data_key: Optional[str] = None):
+    """
+    Configures marshmallow field creation for an attribute.
+    This function acts as a wrapper for attr.ib
+
+    :param attribute: Existing attrs attribute to extend
+    :param skip: Do not include this field in schema
+    :param field: Manually pass field instance
+    :param kwargs: Kwargs to pass to field constructor
+    :param data_key: Shortcut to specify data_key in kwargs
+    :return: attr.Attribute
+    """
     attribute = attribute or attr.ib()
     opts = attribute.metadata.setdefault(MARSHMALLOW_OPTS, {})
 
-    kwargs = {**opts.get("kwargs", {}), **(kwargs or {})}
+    kwargs = {**opts.get(MARSHMALLOW_KWARGS_OPT, {}), **(kwargs or {})}
     if data_key is not None:
-        kwargs["data_key"] = data_key
-    opts["kwargs"] = kwargs
+        kwargs[MARSHMALLOW_DATA_KEY_OPT] = data_key
+    opts[MARSHMALLOW_KWARGS_OPT] = kwargs
 
     if skip is not None:
-        opts["skip"] = skip
+        opts[MARSHMALLOW_SKIP_OPT] = skip
     if field is not None:
-        opts["field"] = field
+        opts[MARSHMALLOW_FIELD_OPT] = field
 
     return attribute
 
 
 def register_simple_field(cls: Type, field: Type[Field]):
+    """
+    Registers marshmallow field for type
+    :param cls:
+    :param field: marshmallow Field
+    """
     _SIMPLE_TYPES[cls] = field
 
 
 def register_field_hook(field_for_attr_hook: FIELD_FOR_ATTR_HOOK):
+    """
+    Registers function for field generation.
+    :param field_for_attr_hook: Function
+    """
     _FIELD_FOR_ATTR_HOOKS.append(field_for_attr_hook)
